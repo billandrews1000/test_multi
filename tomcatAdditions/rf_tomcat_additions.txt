@@ -1,0 +1,123 @@
+RF Tomcat Additions
+===================
+Tomcat Additions contain jar(s) augmenting the Tomcat 7 out-of-box functionality.
+
+The original package, rf_tomcat_adds.jar contains Tomcat modifications
+dealing with webapp deployment, webapp load order and log directory cleanup.
+This is used by ALL our Tomcat 7 installations, and goes into tomcat/lib.
+BEWARE that (commonly used) rf_tomcat_adds.jar built 08/17/2016 contains 'leftover' 
+jars (unreferenced)  from the original Dec 2015 release.
+
+Additional package rf_tomcat_valves.jar contains additonal Tomcat valve(s),
+currently used only by the 'monitor' application, and goes into tomcat/lib.
+
+History:
+2015 December: Initial version, without webapp ordering, some limitations.
+               Classes DeployUpdater, DeployValidator, WebAppInitalizer
+               were removed by the 2016 release below
+2016 August:   Overhaul, adding webapp ordering. Because of build errors,
+               resulting rf_tomcat_adds.jar ALSO included the classes
+               removed above (compiled 11/20/2015), but no more referenced.
+2020 January:  Added 'valves', specifically the RfAuthenticationValve.
+               This required adding prerequisite Tomcat/lib/*.jar files.
+               
+               
+FUNCTIONALITY:
+==============
+
+RfHostListener
+--------------
+Host listener implements Tomcat/Catalina LifecycleListener, configured in Tomcat server.xml 
+to listen to Host lifecycle events:
+
+    <Host name="localhost"  appBase="webapps" unpackWARs="true" autoDeploy="true" >
+	<!-- MXB: Recordfusion Lifecycle Listener, used to validate/update deployed webapps on startup -->
+	<!-- You may supply appBase="none" logDir="none" to disable respective directory handling      -->
+	<!-- logAge=nn enables automatic log directory purge, deleting log files older than nn days    -->
+	<!-- accAge=n  specifies separate 'age' for accelerated purge of *stdout*.log, *stderr*.log    -->
+	<Listener className="com.recordfusion.tomcat.listener.RfHostListener" appBase="webapps" logDir="logs" logAge="20" />
+
+On startup, listener invokes RfDeployManager, making sure that all deployed web applications (webapps/*.war)
+expansions (deployments) are up-to-date. Any obsolete expasions are deleted, forcing Tomcat to re-deploy.
+<br/>
+Also on startup, listener invokes RfLogManager, which deletes dummy log files created by Tomcat startup
+prior to log4j initialization, and (optionally) schedules automatic purging of (log) files older
+than prescribed number of days.
+ 
+ 
+RfHostConfig
+------------
+RfHostConfg overrides Apache HostConfig.filterAppPaths() allowing to SORT applications 
+in order prescribed by (webapps directory) file webappsOrder.txt.
+To configure this class into Tomcat 7 instance, you must modify the file server.xml,
+element <Host/> adding attribute hostConfigClass="com.recordfusion.tomcat.listener.RfHostConfig"
+(this overrides the default org.apache.catalina.startup.HostConfig).
+
+ <Host name="localhost"  appBase="webapps" unpackWARs="true" autoDeploy="true" deployOnStartup="false" hostConfigClass="com.recordfusion.tomcat.listener.RfHostConfig">
+
+The file webapps/webappsOrder.txt is a list of regular expression patterns, for example:
+  # This file prescribes webapp load order
+  # Webapp directory/war names will be sorted selecting names matching the first Regex pattern below, then the next ...
+  # Note that webapp directory usually contains both webapp expansion (county) and the war file (count.war),
+  # hence the pattern will usually end with .*. Patterns are case-sensitive by default.
+  View.*
+  knowledge.*
+ 
+RfDeployManager
+---------------
+Class used to manage Tomcat deployed webapps. 
+Since Tomcat (even with autoDeploy="true") does NOT check/update/redeploy web-apps from
+their *.war files (and hence we could miss updates applied while Tomcat was down),
+this code invoked from Tomcat 'HostListener':
+   - checks if the deployed application (expanded .war) matches the .war content </li>
+   - on any mismatch deletes (or renames) deployed application causing 'on_demand' (re)deploy </li>
+ 
+RfLogManager
+------------
+Log manager is called by Tomcat 'HostListener'. It is used to delete 'dummy' log files
+created by Tomcat start (prior to log initialization), and (optionally) to purge old
+log files.
+
+Old log files are defined by (server.xml) configured logAge={days}, and identified as
+log directory files having pattern 'log' anywhere in the file name.
+Special files (see ACCEL_LOGS) may be subject to 'accelerated' purging, using accAge
+(accelerated files age).
+Undefined (or 0) oldAge disables old log purging, undefined (or 0) accAge treats
+accelerated files as other log files.
+Log purge is performed by a timer thread during the hour 0-1 of the day.
+
+ 
+RfAuthenticationValve
+ ---------------------
+Solution to PROBLEM that in Tomcat, the FORM and BASIC authorization methods can not co-exist.
+However, our Monitor app needs to use the BASIC method for the PUT (refresh) requests, and
+the FORM method for the UI (which is considerably 'safer')
+
+This Tomcat Valve is uses Authorization header (if present) in incoming request to authenticate
+using the BASIC method, otherwise the 'web.xml' specified (FORM) authentication method takes place.
+There is no reason to use this class when 'web.xml' prescribes BASIC authentication only.
+
+You can use this valve by adding 
+
+   <Valve className="com.recordfusion.tomcat.valve.RfAuthenticationValve" allow="refresh" />
+   
+tag either to the server.xml file (applies globally) or in the META-INF/context.xml file of your WebApp
+(as used in app/monitor - applies to that webapp only). The attribute 'allow' specifies RegEx pattern(s)
+to use as filtering, only allowing BASIC authentication for requests having specified pattern in the URI.
+For example, allow='refresh' will ONLY allow BASIC authentication for requests having pattern 'refresh'
+as a part of the url (/monitor/refresh).
+
+BEWARE that this valve is shipped as rf_tomcat_valves.jar, which must be placed in the Tomcat /lib 
+directory. Unfortunately, it can NOT be shipped as a part of the webapp only.
+
+
+
+ 
+
+
+
+ 
+
+ 
+
+             

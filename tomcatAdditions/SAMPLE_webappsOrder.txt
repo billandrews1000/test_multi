@@ -1,0 +1,13 @@
+# This sample file webapps/webappsOrder.txt prescribes webapp load order
+# Webapp directory/war names will be sorted selecting names matching the first Regex pattern below, then the next ...
+# Note that webapp directory usually contains both webapp expansion (county) and the war file (count.war),
+# hence the pattern will usually end with .*. Patterns are case-sensitive by default.
+#
+resource.*
+.*svc.*
+.*ws((\.war)|$)
+ImageViewer.*
+knowledge.*
+logger.*
+countyweb.*
+county.*

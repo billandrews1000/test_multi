@@ -1,0 +1,7 @@
+build
+${jboss.home}
+report
+build.properties
+.settings
+exp
+jar

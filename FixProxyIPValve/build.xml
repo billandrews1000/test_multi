@@ -1,0 +1,31 @@
+<!-- This is a build file for ant  -->
+
+<project name="FixProxyIPValve" default="jar" basedir=".">
+
+  <property name="ProjectName" value="FixProxyIPValve"/>
+
+  <path id="compile.path">
+    <fileset dir="lib" includes="*.jar" />
+  </path>
+
+  <target name="prepare">
+    <mkdir dir="build"/>
+    <tstamp/>
+  </target>
+
+  <target name="compile" depends="prepare">
+    <javac srcdir="src" destdir="build"
+    debug="false">
+	<classpath refid="compile.path"/>
+    </javac>
+  </target>
+
+ <target name="jar" depends="compile">
+    <jar jarfile="${ProjectName}.jar" basedir="build"/>
+  </target>
+
+	<target name="clean" description="Remove previous build results">
+        <delete dir="build"/>
+	</target>
+
+</project>

@@ -1,0 +1,148 @@
+<!--
+  == CONCEPTS ==================================================================
+  COMPONET BUILD DRIVER
+  For 'tomcatAdditions' used as the TOP build driver
+  BEWARE, this builds BOTH rf_tomcat_ads.jar and rf_tomcat_valves.jar (RfAuthenticationValve)
+-->
+<project name="tomcatAds" default="all" basedir=".">
+    <!-- BEWARE: Requires ANT 1.6 + ant-contrib-1.0b2 in ant/lib/ant-contrib.jar -->
+    <!-- BEWARE: Unit tests require ant/lib/junit.jar -->
+    <taskdef resource="net/sf/antcontrib/antlib.xml" />
+
+     <!-- Component name, for use in various concatenations -->
+    <property name="component.name" value="tomcatAds"/>
+    <property name="project.root" value="."/>
+
+    <import file="./build_macros.xml"/>
+    <import file="./build_environment.xml"/>
+
+  <!-- ================================================================ -->
+  <!-- Class paths (all defined locally for greater flexibility)        -->
+  <!-- ================================================================ -->
+
+  <!-- The build classpath -->
+  <path id="build.classpath">
+      <!-- Imported jars: please, be specific here, minimize wildcards! -->
+      <fileset dir="${lib.dir}/jar">
+    	  <!-- catalina.jar plus logging -->
+          <include name="**/*.jar"/>
+      </fileset>
+      <fileset dir="${exp.dir}/jar">
+      	  <!-- limited subset of 'fusion/exp/jar' -->
+          <include name="**/*.jar"/>
+      </fileset>
+   	
+  </path>
+
+  <!-- N/A: Classpath for running the app -->
+  <path id="run.classpath">
+    <path refid="build.classpath"/>
+    <pathelement location="${build.dir}"/>
+   </path>
+
+  <!-- Classpath for unit tests. BEWARE, test classes are in separate path -->
+  <path id="test.classpath">
+    <pathelement location="${build.dir}/test"/>
+    <path refid="run.classpath"/>
+  </path>
+
+  <!-- ================================================================ -->
+  <!-- Required targets (targets invoked by the top-level build)        -->
+  <!-- Do not insert any complex tasks here, simply define depends      -->
+  <!-- ================================================================ -->
+
+  <target name="export" depends="package">
+    <copy file="${jar.dir}/rf_tomcat_ads.jar"       todir="${exp.dir}/"/>
+    <copy file="${jar.dir}/rf_tomcat_valves.jar"    todir="${exp.dir}/"/>
+    <copy file="${basedir}/rf_tomcat_additions.txt" todir="${exp.dir}/"/>
+ </target>
+
+  <target name="make" description="Make all components, ready for tests" depends="compile,make_jars">
+  </target>
+
+  <target name="test" description="Execute unit-level test(s)" depends="run_tests">
+  </target>
+
+  <target name="stress" description="Execute stress-level test(s)" depends="make">
+  </target>
+
+  <target name="all" description="Make and unit test" depends="test">
+  </target>
+
+  <target name="package" description="Package build results for deployment" depends="make_jars">
+  </target>
+
+  <target name="deploy" description="Deploy resulting jar to ..\fusion\lib\jar" depends="make" >
+       <copy file="${jar.dir}/rf_tomcat_ads.jar"       todir="${tomcat.lib.dir}/"/>
+       <copy file="${jar.dir}/rf_tomcat_valves.jar"    todir="${tomcat.lib.dir}/"/>
+       <copy file="${basedir}/rf_tomcat_additions.txt" todir="${tomcat.lib.dir}/"/>
+ </target>
+
+  <target name="clean" description="Remove previous build results">
+      <macro_clean_dirs/>
+  	  <delete dir="${exp.dir}"/>
+  </target>
+
+
+  <!-- =================================================================== -->
+  <!-- Initialize for the build. Create all directories and static files   -->
+  <!-- =================================================================== -->
+  <target name="init" description="Initialize for a build">
+    <macro_build_version file="${project.root}/build_version.properties" update="false" />
+    <macro_init_dirs/>
+  </target>
+
+
+  <!-- ================================================================ -->
+  <!-- Compilation and other build-component targets                    -->
+  <!-- ================================================================ -->
+  <target name="compile" description="Build components" depends="init">
+    <!-- Copy and edit files as necessary, then compile -->
+    <macro_javac src="${src.dir}" pathref="build.classpath" dest="${build.dir}" />
+  </target>
+
+  <target name="compile_tests" description="Build tests" depends="compile">
+    <!-- Compile tests, classes go into SEPARATE directory tree -->
+    <macro_javac src="${test.dir}" pathref="test.classpath" dest="${build.dir}/test" />
+  </target>
+
+  <!-- ================================================================ -->
+  <!-- Packaging and related targets                                    -->
+  <!-- ================================================================ -->
+  <target name="make_jars" description="Assmble components" depends="compile">
+	<!-- first make sure we get all of the resource files into the folder -->
+      <jar jarfile="jar/rf_tomcat_ads.jar">
+          <!--metainf dir="dd/ejb" includes="**/*.xml" /-->
+          <fileset dir="${build.dir}">
+             <include name="com/recordfusion/tomcat/listener/**"/>
+          </fileset>
+      </jar>
+       <jar jarfile="jar/rf_tomcat_valves.jar">
+          <!--metainf dir="dd/ejb" includes="**/*.xml" /-->
+          <fileset dir="${build.dir}">
+             <include name="com/recordfusion/tomcat/valve/**"/>
+          </fileset>
+      </jar>
+  </target>
+
+
+
+  <!-- ================================================================ -->
+  <!-- Execution and test targets                                       -->
+  <!-- ================================================================ -->
+  <!-- Run the standalone client -->
+  <target name="run" description="NOOP: Run stand-alone client">
+	<java jvm="C:\Program Files (x86)\Java\jre1.8.0_45\bin\java"
+		classpathref="run.classpath" classname="com.recordfusion.app.county.shared.browser.impl.tomcatAdsDemo" fork="yes">
+		<!--jvmarg value="-Djava.security.auth.login.config=dd/client/auth.conf" /-->
+		<!--arg value="-domains=file:../../template_domains.xml" /-->
+		<arg value="25"/>
+	</java>
+  	
+  </target>
+
+  <target name="run_tests" description="Execeute unit level tests" depends="make,compile_tests">
+      <macro_junit path="test.classpath" class="com.recordfusion.app.county.shared.browser.impl.tomcatAdsDemo"/>
+  </target>
+
+</project>

@@ -1,0 +1,351 @@
+<!-- ======================================================================= -->
+<!-- Shared macro definitions for targets used in COMPONENT build.xml        -->
+<!-- Depends on build_environment.xml                                        -->
+<!-- ======================================================================= -->
+
+<!-- BEWARE, this differs from the basic 'fusion' project by using 
+     <javac executable="${javac.compiler}" in macro_javac -->
+
+<project name="build_macros" basedir="." default="dummy">
+
+    <!-- =================================================================== -->
+    <!-- macro_init_dirs. Creates all standard directories                   -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_init_dirs">
+        <sequential>
+            <mkdir dir="${exp.dir}"/>
+            <mkdir dir="${exp.dir}/jar"/>
+            <mkdir dir="${exp.dir}/exe"/>
+            <mkdir dir="${exp.dir}/jar_signed"/>
+            <mkdir dir="${lib.dir}/jar_signed"/>
+            <mkdir dir="${build.dir}"/>
+            <mkdir dir="${build.dir}/test"/>
+            <mkdir dir="${jar.dir}"/>
+            <mkdir dir="${report.dir}"/>
+            <mkdir dir="${report.dir}/html"/>
+            <mkdir dir="${temp.dir}"/>
+        	<mkdir dir="${deploy_extra.dir}"/>
+       </sequential>
+    </macrodef>
+
+    <!-- =================================================================== -->
+    <!-- macro_clean. Normal celanup by removing build outputs               -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_clean_dirs">
+        <sequential>
+            <delete dir="${build.dir}"/>
+            <delete dir="${jar.dir}"/>
+             <delete dir="${temp.dir}"/>
+        </sequential>
+    </macrodef>
+
+    <!-- =================================================================== -->
+    <!-- macro_javac. Standard javac compiler execution                      -->
+    <!-- @{src} - javac srcdir directory                                     -->
+    <!-- @{dest} - javac destdir directory                                   -->
+    <!-- @{pathref} - javac classpath path reference                         -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_javac">
+        <attribute name="src"/>
+        <attribute name="dest"/>
+        <attribute name="pathref">
+        </attribute>
+        <sequential>
+        	<echo message="${javac.compiler}" />
+           <if>
+                <istrue value="${build.javac.lint}"/>
+                <then>
+                    <javac executable="${javac.compiler}"  includeantruntime="false"
+                    	srcdir="@{src}" classpathref="@{pathref}" destdir="@{dest}"
+                        source="${javac.source}" target="${javac.target}"
+                        debug="${javac.debug}" deprecation="${javac.deprecation}"
+                        encoding="8859_1"
+                        fork="yes" memoryMaximumSize="256m">
+                        <compilerarg value="-Xlint:unchecked -version" />
+                        <!--compilerarg value="-Xlint:fallthrough" /-->
+                        <compilerarg value="-Xlint:finally" />
+                     </javac>
+                </then>
+                <else>
+                    <javac   executable="${javac.compiler}" includeantruntime="false"
+                    	srcdir="@{src}" classpathref="@{pathref}" destdir="@{dest}"
+                    	source="${javac.source}" target="${javac.target}"
+                        debug="${javac.debug}" deprecation="${javac.deprecation}"
+                        encoding="8859_1"
+                        fork="yes" memoryMaximumSize="256m">
+                    </javac>
+                </else>
+            </if>
+            <!-- copy all .xml files found under src, usually class resources -->
+            <copy todir="@{dest}">
+                <fileset dir="@{src}">
+                    <include name="**/*.xml" />
+                </fileset>
+            </copy>
+        </sequential>
+    </macrodef>
+
+    <!-- =================================================================== -->
+    <!-- macro_copy. Copies .<ext> files between hierarchies                 -->
+    <!-- @{src} - javac srcdir directory                                     -->
+    <!-- @{dest} - javac destdir directory                                   -->
+    <!-- @{ext} - file type/extension                                        -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_copy">
+        <attribute name="src"/>
+        <attribute name="dest"/>
+        <attribute name="ext"/>
+        <sequential>
+           <!-- copy all .ext files found under src, usually class resources -->
+            <copy todir="@{dest}">
+                <fileset dir="@{src}">
+                    <include name="**/*.@{ext}" />
+                </fileset>
+            </copy>
+        </sequential>
+    </macrodef>
+
+    <!-- =================================================================== -->
+    <!-- macro_timestamp. Generates properties  build.stamp, build.date      -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_timestamp">
+        <sequential>
+            <tstamp>
+                <format property="build.stamp" pattern="yyMMdd_HHmm"/>
+                <format property="build.date" pattern="MMMMM dd, yyyy hh:mm aaa"/>
+            </tstamp>
+        </sequential>
+    </macrodef>
+
+    <!-- =================================================================== -->
+    <!-- macro_junit. Executes junit test(s), and generates report(s)        -->
+    <!-- @{path} = test execution classpath reference (name)                 -->
+    <!-- @{class} = test class name                                          -->
+    <!-- Uses properties:   ${component}, ${basedir} ${report.dir}           -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_junit">
+        <attribute name="path"/>
+        <attribute name="class"/>
+        <sequential>
+            <!-- junit task requires juinit.jar in ANT_HOME/lib -->
+            <junit fork="yes" dir="${basedir}" haltonerror="yes" haltonfailure="yes"
+                printsummary="yes" showoutput="no">
+                <classpath refid="@{path}"/>
+                <formatter type="xml"/>
+                <test name="@{class}" outfile="${report.dir}/${component.name}"/>
+            </junit>
+            <!-- always rebuild ALL reports, we'd have to gen reports from top -->
+            <junitreport todir="${report.dir}">
+                <fileset dir="${report.dir}">
+                    <include name="*_*.xml"/>
+                </fileset>
+                <report format="frames" todir="${report.dir}/html"/>
+            </junitreport>
+        </sequential>
+    </macrodef>
+
+    <!-- =================================================================== -->
+    <!-- macro_build_version                                                 -->
+    <!-- @{file} = property file containing build njumber/version properties -->
+    <!-- @{update} = boolean, true=increment the build.update_number         -->
+    <!-- Loads given property file, loads build.number=build.update_number+1 -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_build_version">
+        <attribute name="file"/>
+        <attribute name="update"/>
+        <sequential>
+            <!-- Establish new timestamps, to always show the real build time -->
+            <macro_timestamp/>
+            <property file="@{file}"/>
+            <if>
+                <istrue value="@{update}"/>
+                <then>
+                    <echo message="Updating build.update_number in @{file}"/>
+                    <!-- The <buildnumber/> ant task is way too limited -->
+                    <propertyfile file="${project.root}/build_version.properties"
+                        comment="Build version with build-auto-updated number, stamp and date, please derive build.number from build.update_number">
+                        <entry key="build.update_number" default="0" type="int" operation="+" value="1" />
+                        <entry key="build.update_stamp"  default="050601" value="${build.stamp}"/>
+                        <entry key="build.update_date"   default="today"  value="${build.date}"/>
+                        <entry key="build.update_user"   default="me"     value="${user.name}"/>
+                    </propertyfile>
+                    <!-- Now we must repeat the build increment operation -->
+                    <math result="build.number" operand1="${build.update_number}"
+                       operation="+" operand2="1" datatype="int" />
+                     <!-- TODO: The official build shoud cvs commit the build_version.properties -->
+                </then>
+                <else>
+                    <!-- echo message="Using build version from @{file}"/-->
+                    <property name="build.number" value="${build.update_number}"/>
+                </else>
+            </if>
+            <!-- echo message="Build ${build.major}.${build.minor}.${build.number} - ${build.stamp} on ${build.date}"/-->
+        </sequential>
+    </macrodef>
+
+
+    <!-- =================================================================== -->
+    <!-- macro_build_identification (see BuildIdentification.java)           -->
+    <!-- @{file} = property file containing build identification properties  -->
+    <!-- =================================================================== -->
+     <macrodef name="macro_build_identification">
+        <attribute name="file"/>
+        <sequential>
+             <!--property file="@{file}"/-->
+             <property file="@{file}"/>
+             <propertyfile file="@{file}" comment="Build Identification for ${component.name}">
+                 <!-- fixed properties, must be defined/edited explicitly
+                 "build.id.component"
+                 "build.id.major"
+                 "build.id.minor"
+                 "build.id.patch"
+                 -->
+                 <entry key="build.id.number" default="0"      value="${build.number}" type="int" />
+                 <entry key="build.id.stamp"  default="050601" value="${build.stamp}"/>
+                 <entry key="build.id.date"   default="today"  value="${build.date}"/>
+                 <entry key="build.id.user"   default="me"     value="${user.name}"/>
+                 <entry key="build.id.host"   default="host"   value="${build.host}"/>
+             </propertyfile>
+             <echo message="Updated build id: ${build.number} (${build.stamp}) on ${build.date} by ${user.name} on ${build.host}"/>
+        </sequential>
+    </macrodef>
+
+
+    <!-- =================================================================== -->
+    <!-- macro_sign_jars_list. Signs a path-ref of jar files, to jar_signed  -->
+    <!-- @{path} - jar files path,  any "/jar" is replaced by "/jar_signed"  -->
+    <!-- =================================================================== -->
+
+    <macrodef name="macro_sign_jars_list">
+        <attribute name="path"/>
+        <sequential>
+            <foreach target="sign_one_jar" param="item" trim="true">
+                <path refid="@{path}"/>
+            </foreach>
+        </sequential>
+    </macrodef>
+
+    <target name="sign_one_jar">
+        <macro_sign_move_jar jar="${item}"/>
+    </target>
+
+    <!-- =================================================================== -->
+    <!-- macro_sign_move_jar. Jar signer, moves /jar to /jar_signed dir      -->
+    <!-- @{jar} - jar file path,  "/jar" directory replaced by "/jar_signed" -->
+    <!-- @{alias} - key alias (name)                                         -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_sign_move_jar">
+        <attribute name="jar"/>
+        <sequential>
+        	<!-- Signed result goes into /jar_signed directory -->
+        	<!-- I can not replace durectory to "\jar_signed", escape is tossed away  -->
+           <propertyregex property="sgn.res" input="@{jar}" regexp="(\\jar)|(/jar)" replace="/jar_signed" />
+           <propertyregex property="agn.att" input="@{jar}" regexp="\.jar" replace=".att" />
+           <!-- Update jar providing security attributes, EXCEPT for the ones marked as having attributes using .att file -->
+           <!-- We use the .att mark-file to avoid altering attributes for pre-signed jars, such as Bouncy Castle crypto provider -->
+           <if>	
+           	   <available file="${agn.att}" />
+         	   <then> 
+           			<echo message="Skipping attribute setting in  @{jar}"/>
+                	<!-- With Java 7, we need to add digestalg="{$sec.digestalg}" supported by ant 1.8.3  -->
+                	<signjar jar="@{jar}" verbose="false" signedjar="${sgn.res}" keystore="${sec.keystore}" storetype="${sec.storetype}" alias="${sec.alias}" storepass="${sec.storepass}"/>
+               </then>
+               <else>
+     	           <property name="sgn.src" value="${sgn.res}_tmp"/>
+               	   <uptodate srcfile="@{jar}" targetfile="${sgn.src}" property="sgn.oldjar"/>
+				   <if> <isfalse value="sgn.oldjar"/>
+				   	  	<then>
+		               	   <copy  file="@{jar}" tofile="${sgn.src}" />
+		            	   <!-- echo message="Updating jar attributes into ${sgn.src}" / -->
+				           <jar file="${sgn.src}" update="true">
+				           		<manifest>
+				           			<attribute name="Application-Name" value="${app.name}" />
+				               		<attribute name="Permissions"      value="${app.permissions}" />
+				                   	<attribute name="Codebase"         value="${app.codebase}" />
+				                </manifest>
+				           </jar> 
+				   	  	</then>
+				   </if>
+                   <var name="sgn.oldjar" unset="true"/>
+               	   <!-- echo message="Signing ${sgn.src}" / -->
+            	   <!-- With Java 7, we need to add digestalg="{$sec.digestalg}" supported by ant 1.8.3  -->
+               	   <signjar jar="${sgn.src}" verbose="false" signedjar="${sgn.res}" keystore="${sec.keystore}" storetype="${sec.storetype}" alias="${sec.alias}" storepass="${sec.storepass}" />
+				   <!-- We keep .src file to skip re-signing of unchanged jar, do NOT: delete file="${sgn.src}"  /-->
+                   <var name="sgn.src" unset="true"/>
+               </else>
+           </if>
+           <var name="sgn.res" unset="true"/>
+           <var name="agn.att" unset="true"/>
+       	
+        </sequential>
+    </macrodef>
+
+    <!-- default target, in case someone invokes this file -->
+    <target name="dummy">
+    </target>
+
+
+    <!-- =================================================================== -->
+    <!-- macro_update_build_time                                             -->
+    <!-- @{src} = source template file containing @time@ placeholder         -->
+    <!-- @{tgt} = target file to update/generate replacing @time@            -->
+    <!-- @{uptodate} = boolean, true=up-to-date (do NOT rebuild) the target  -->
+    <!-- If NOT(uptodate) re-generate the tgt file replacing the build date  -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_update_build_time">
+        <attribute name="src"/>
+        <attribute name="tgt"/>
+        <attribute name="uptodate"/>
+        <sequential>
+            <!-- Establish new timestamps, to always show the real build time -->
+            <tstamp>
+                <format property="build.time" pattern="MM/dd/yyyy hh:mm:ss a"/>
+            </tstamp>
+
+             <if> <isfalse value="@{uptodate}"/>
+                <then>
+                    <echo message="Replacing build time in @{tgt}"/>
+                    <delete  file="@{tgt}"/>
+                    <copy    file="@{src}" tofile="@{tgt}"/>
+                    <replace file="@{tgt}" token="@time@" value="${build.time}"/>
+                </then>
+                <else>
+                    <echo message="Build time in @{tgt} is up-to-date"/>
+                </else>
+            </if>
+        </sequential>
+    </macrodef>
+
+	
+    <!-- =================================================================== -->
+    <!-- macro_init_dirs. Creates all standard directories                   -->
+    <!-- =================================================================== -->
+    <macrodef name="macro_init_wsdl">
+        <sequential>
+    		<path id="axis.classpath">
+    			<!-- fileset dir="c:/RecordFusion/axis-1_4/lib" includes="*.jar" /-->
+    			<fileset dir="${lib.dir}/jar" includes="axis*.jar" />
+    			<fileset dir="${lib.dir}/jar" includes="commons*.jar" />
+    			<fileset dir="${lib.dir}/jar" includes="jaxrpc.jar" />
+    			<fileset dir="${lib.dir}/jar" includes="activation.jar" />
+    			<fileset dir="${lib.dir}/jar" includes="wsdl4j*.jar" />
+    			<fileset dir="${lib.dir}/jar" includes="saaj.jar" />
+    			<pathelement location="${build.dir}" />
+    		</path >
+    		<taskdef name="wsdl2java" classname="org.apache.axis.tools.ant.wsdl.Wsdl2javaAntTask"
+    			loaderref="axis" >
+    			<classpath refid="axis.classpath"/>
+    		</taskdef>
+    		<taskdef name="java2wsdl" classname="org.apache.axis.tools.ant.wsdl.Java2WsdlAntTask"
+    			loaderref="axis" >
+    			<classpath refid="axis.classpath"/>
+    		</taskdef>
+    		<taskdef name="admin" classname="org.apache.axis.tools.ant.axis.AdminClientTask"
+    			loaderref="axis" >
+    			<classpath refid="axis.classpath"/>
+    		</taskdef>
+       </sequential>
+    </macrodef>
+	
+	
+</project>
